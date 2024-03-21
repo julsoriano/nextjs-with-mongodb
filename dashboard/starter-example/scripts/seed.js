@@ -1,4 +1,4 @@
-const { db } = require('@vercel/postgres');
+const { MongoClient } = require('mongodb');
 const {
   invoices,
   customers,
@@ -7,74 +7,89 @@ const {
 } = require('../app/lib/placeholder-data.js');
 const bcrypt = require('bcrypt');
 
+// Using MongoDB
 async function seedUsers(client) {
   try {
-    await client.sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`;
-    // Create the "users" table if it doesn't exist
-    const createTable = await client.sql`
-      CREATE TABLE IF NOT EXISTS users (
-        id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        email TEXT NOT NULL UNIQUE,
-        password TEXT NOT NULL
-      );
-    `;
+    const createTable = await client
+      .db('trackmedv2')
+      .collection('users')
+      .countDocuments();
 
+    if (createTable) {
+      console.log('users collection already exists with data');
+      client.close();
+      return;
+    }
     console.log(`Created "users" table`);
 
     // Insert data into the "users" table
     const insertedUsers = await Promise.all(
       users.map(async (user) => {
         const hashedPassword = await bcrypt.hash(user.password, 10);
-        return client.sql`
-        INSERT INTO users (id, name, email, password)
-        VALUES (${user.id}, ${user.name}, ${user.email}, ${hashedPassword})
-        ON CONFLICT (id) DO NOTHING;
-      `;
-      }),
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          password: hashedPassword
+        };
+     }),
     );
 
-    console.log(`Seeded ${insertedUsers.length} users`);
+    const insert = await client
+      .db('trackmedv2')
+      .collection('users')
+      .insertMany(insertedUsers);    
 
+    if (insert.acknowledged) {
+      console.log(`Seeded ${insertedUsers.length} users`);
+    }    
+    
     return {
       createTable,
       users: insertedUsers,
     };
+
   } catch (error) {
     console.error('Error seeding users:', error);
     throw error;
-  }
+  } 
 }
 
 async function seedInvoices(client) {
+  // Create the "invoices" table if it doesn't exist
   try {
-    await client.sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`;
+    const createTable = await client
+      .db('trackmedv2')
+      .collection('invoices')
+      .countDocuments();
 
-    // Create the "invoices" table if it doesn't exist
-    const createTable = await client.sql`
-    CREATE TABLE IF NOT EXISTS invoices (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    customer_id UUID NOT NULL,
-    amount INT NOT NULL,
-    status VARCHAR(255) NOT NULL,
-    date DATE NOT NULL
-  );
-`;
-
+    if (createTable) {
+      console.log('invoices collection already exists with data');
+      client.close();
+      return;
+    }
     console.log(`Created "invoices" table`);
 
-    // Insert data into the "invoices" table
+    // Insert data into the "collections" table
     const insertedInvoices = await Promise.all(
-      invoices.map(
-        (invoice) => client.sql`
-        INSERT INTO invoices (customer_id, amount, status, date)
-        VALUES (${invoice.customer_id}, ${invoice.amount}, ${invoice.status}, ${invoice.date})
-        ON CONFLICT (id) DO NOTHING;
-      `,
-      ),
+      invoices.map(async (invoice) => {
+        return {
+          customer_id: invoice.customer_id,
+          amount: invoice.amount,
+          status: invoice.status,
+          date: invoice.date
+        };
+     }),
     );
 
-    console.log(`Seeded ${insertedInvoices.length} invoices`);
+    const insert = await client
+      .db('trackmedv2')
+      .collection('invoices')
+      .insertMany(insertedInvoices);    
+
+    if (insert.acknowledged) {
+      console.log(`Seeded ${insertedInvoices.length} invoices`);
+    }        
 
     return {
       createTable,
@@ -87,33 +102,40 @@ async function seedInvoices(client) {
 }
 
 async function seedCustomers(client) {
+  // Create the "customers" table if it doesn't exist
   try {
-    await client.sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`;
+    const createTable = await client
+      .db('trackmedv2')
+      .collection('customers')
+      .countDocuments();
 
-    // Create the "customers" table if it doesn't exist
-    const createTable = await client.sql`
-      CREATE TABLE IF NOT EXISTS customers (
-        id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        email VARCHAR(255) NOT NULL,
-        image_url VARCHAR(255) NOT NULL
-      );
-    `;
-
+    if (createTable) {
+      console.log('customers collection already exists with data');
+      client.close();
+      return;
+    }
     console.log(`Created "customers" table`);
 
-    // Insert data into the "customers" table
+    // Insert data into the "collections" table
     const insertedCustomers = await Promise.all(
-      customers.map(
-        (customer) => client.sql`
-        INSERT INTO customers (id, name, email, image_url)
-        VALUES (${customer.id}, ${customer.name}, ${customer.email}, ${customer.image_url})
-        ON CONFLICT (id) DO NOTHING;
-      `,
-      ),
+      customers.map(async (customer) => {
+        return {
+          id: customer.id,
+          name: customer.name,
+          email: customer.email,
+          image_url: customer.image_url
+        };
+     }),
     );
 
-    console.log(`Seeded ${insertedCustomers.length} customers`);
+    const insert = await client
+      .db('trackmedv2')
+      .collection('customers')
+      .insertMany(insertedCustomers);    
+
+    if (insert.acknowledged) {
+      console.log(`Seeded ${insertedCustomers.length} customers`);
+    }        
 
     return {
       createTable,
@@ -128,27 +150,36 @@ async function seedCustomers(client) {
 async function seedRevenue(client) {
   try {
     // Create the "revenue" table if it doesn't exist
-    const createTable = await client.sql`
-      CREATE TABLE IF NOT EXISTS revenue (
-        month VARCHAR(4) NOT NULL UNIQUE,
-        revenue INT NOT NULL
-      );
-    `;
+    const createTable = await client
+      .db('trackmedv2')
+      .collection('revenue')
+      .countDocuments();
 
+    if (createTable) {
+      console.log('revenue collection already exists with data');
+      client.close();
+      return;
+    }
     console.log(`Created "revenue" table`);
 
-    // Insert data into the "revenue" table
+    // Insert data into the "collections" table
     const insertedRevenue = await Promise.all(
-      revenue.map(
-        (rev) => client.sql`
-        INSERT INTO revenue (month, revenue)
-        VALUES (${rev.month}, ${rev.revenue})
-        ON CONFLICT (month) DO NOTHING;
-      `,
-      ),
+      revenue.map(async (revenue) => {
+        return {
+          month: revenue.month,
+          amount: revenue.revenue,
+        };
+     }),
     );
 
-    console.log(`Seeded ${insertedRevenue.length} revenue`);
+    const insert = await client
+      .db('trackmedv2')
+      .collection('revenue')
+      .insertMany(insertedRevenue);    
+
+    if (insert.acknowledged) {
+      console.log(`Seeded ${insertedRevenue.length} revenue`);
+    }        
 
     return {
       createTable,
@@ -161,14 +192,17 @@ async function seedRevenue(client) {
 }
 
 async function main() {
-  const client = await db.connect();
+  const client = new MongoClient(process.env.MONGODB_URI);
+  await client.connect();
+
+  // const client = await db.connect();
 
   await seedUsers(client);
   await seedCustomers(client);
   await seedInvoices(client);
   await seedRevenue(client);
 
-  await client.end();
+  await client.close();
 }
 
 main().catch((err) => {
